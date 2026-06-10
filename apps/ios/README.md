@@ -1,7 +1,7 @@
 # iOS Application Files
 
 ## Important Notice
-⚠️ **The files in this directory are placeholder text files, not actual iOS applications.**
+[NOTE] The files in this directory are placeholder text files, not actual iOS applications.
 
 Files like `app.ipa`, `app.zip`, and `iOS-Simulator-NativeDemoApp-1.0.8.app.zip` contain only the text "Not Found" and cannot be used for testing.
 

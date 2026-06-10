@@ -305,13 +305,13 @@ private get iosSelectors() {
 
 ## Next Steps
 
-1. ✅ Install Xcode and dependencies
-2. ✅ Install Appium with XCUITest driver
-3. ✅ Setup WebDriverAgent signing
-4. ✅ Add your iOS app to `apps/ios/`
-5. ✅ Update `wdio.ios.conf.ts` with correct app path and bundle ID
-6. ✅ Create iOS-specific page objects (or update existing ones)
-7. ✅ Run `npm run test:ios`
+1. [COMPLETE] Install Xcode and dependencies
+2. [COMPLETE] Install Appium with XCUITest driver
+3. [COMPLETE] Setup WebDriverAgent signing
+4. [COMPLETE] Add your iOS app to `apps/ios/`
+5. [COMPLETE] Update `wdio.ios.conf.ts` with correct app path and bundle ID
+6. [COMPLETE] Create iOS-specific page objects (or update existing ones)
+7. [COMPLETE] Run `npm run test:ios`
 
 ## Resources
 
