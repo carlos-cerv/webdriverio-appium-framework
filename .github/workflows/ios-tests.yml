@@ -31,58 +31,108 @@ jobs:
           xcodebuild -version
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Install Appium globally
+        run: npm install -g appium appium-xcuitest-driver
 
       - name: Install Appium drivers
         run: |
-          npx appium driver update xcuitest || npx appium driver install xcuitest
+          appium driver install xcuitest || echo "XCUITest driver already installed"
 
       - name: Create and Boot iOS Simulator
         run: |
           echo "Available iOS Simulators:"
-          xcrun simctl list devices available
+          xcrun simctl list devices available | head -20
           
-          # Find iPhone 15 Pro with iOS 18.4
-          SIMULATOR_ID=$(xcrun simctl list devices available | grep -E "iPhone 15 Pro.*18\.4" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+          # Find iPhone 15 Pro (latest available)
+          echo "Looking for iPhone 15 Pro..."
+          SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15 Pro" | grep -v "unavailable" | head -1 | awk -F'[()]' '{print $(NF-1)}')
           
           if [ -z "$SIMULATOR_ID" ]; then
-            echo "iPhone 15 Pro with iOS 18.4 not found, looking for any iPhone 15 Pro"
-            SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15 Pro" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+            echo "iPhone 15 Pro not found, trying iPhone 15..."
+            SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15" | grep -v "unavailable" | head -1 | awk -F'[()]' '{print $(NF-1)}')
           fi
           
           if [ -z "$SIMULATOR_ID" ]; then
-            echo "No iPhone 15 Pro found, using any available iPhone"
-            SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone" | grep -v "unavailable" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+            echo "Using any available iPhone simulator..."
+            SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone" | grep -v "unavailable" | head -1 | awk -F'[()]' '{print $(NF-1)}')
+          fi
+          
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "ERROR: No suitable iOS simulator found"
+            xcrun simctl list devices
+            exit 1
           fi
           
           echo "Selected Simulator ID: $SIMULATOR_ID"
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> $GITHUB_ENV
           
-          # Get device details
-          DEVICE_INFO=$(xcrun simctl list devices available | grep "$SIMULATOR_ID")
-          echo "Device Info: $DEVICE_INFO"
+          # Shutdown any running simulator first
+          echo "Cleaning up running simulators..."
+          xcrun simctl shutdown all || true
+          sleep 2
           
           # Boot the simulator
-          echo "Booting simulator..."
-          xcrun simctl boot $SIMULATOR_ID || echo "Simulator already booted"
+          echo "Booting simulator: $SIMULATOR_ID"
+          xcrun simctl boot "$SIMULATOR_ID" 2>&1 || true
           
-          # Wait for simulator to be ready
+          # Wait for simulator to be ready with better logic
           echo "Waiting for simulator to be ready..."
-          for i in {1..30}; do
-            if xcrun simctl list devices | grep "$SIMULATOR_ID" | grep -q "Booted"; then
-              echo "Simulator is booted and ready"
+          COUNTER=0
+          MAX_ATTEMPTS=60
+          while [ $COUNTER -lt $MAX_ATTEMPTS ]; do
+            # Check if simulator is booted
+            if xcrun simctl list devices | grep -q "$SIMULATOR_ID.*Booted"; then
+              echo "Simulator is booted!"
               break
             fi
-            echo "Waiting... ($i/30)"
+            COUNTER=$((COUNTER + 1))
+            echo "Waiting... ($COUNTER/$MAX_ATTEMPTS)"
             sleep 2
           done
           
-          # List booted devices
-          echo "Booted devices:"
-          xcrun simctl list devices | grep Booted
+          if [ $COUNTER -eq $MAX_ATTEMPTS ]; then
+            echo "WARNING: Simulator boot timeout reached"
+          fi
+          
+          echo "Final device status:"
+          xcrun simctl list devices | grep -E "Booted|$SIMULATOR_ID"
+
+      - name: Start Appium server
+        run: |
+          echo "Starting Appium server in background..."
+          nohup appium --log-level warn > appium.log 2>&1 &
+          APPIUM_PID=$!
+          echo "Appium PID: $APPIUM_PID"
+          
+          # Wait for Appium to start
+          echo "Waiting for Appium to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:4723/status > /dev/null 2>&1; then
+              echo "Appium is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+          
+          echo "APPIUM_PID=$APPIUM_PID" >> $GITHUB_ENV
 
       - name: Run iOS tests
-        run: npm run test:ios
+        run: |
+          echo "Running iOS tests..."
+          npm run test:ios || TEST_RESULT=$?
+          exit ${TEST_RESULT:-0}
         continue-on-error: true
+
+      - name: Stop Appium server
+        if: always()
+        run: |
+          if [ ! -z "$APPIUM_PID" ]; then
+            kill $APPIUM_PID || true
+            echo "Appium server stopped"
+          fi
 
       - name: Generate Allure Report
         if: always()

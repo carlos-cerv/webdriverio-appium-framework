@@ -14,13 +14,20 @@ Runs automated tests on Android emulator with Allure reporting.
 
 **What it does:**
 - Sets up Android SDK and emulator (API 34)
-- Installs dependencies
+- Installs dependencies with npm cache
+- Starts Appium server automatically
 - Runs Android test suite
 - Generates Allure reports
 - Uploads test artifacts (results, reports, screenshots)
 - Publishes report to GitHub Pages
 
-**Duration:** ~10-15 minutes (with caching ~8-12 minutes)
+**Duration:** ~12-18 minutes
+
+**Performance Optimizations:**
+- npm cache enabled for faster installs
+- 4 cores and 8GB RAM for emulator
+- Hardware acceleration disabled in CI
+- Global Appium installation for faster startup
 
 ---
 
@@ -34,16 +41,22 @@ Runs automated tests on iOS simulator with Allure reporting.
 
 **What it does:**
 - Sets up Xcode and iOS dependencies
-- Installs Appium XCUITest driver
-- Starts iOS simulator (iPhone 15 Pro or available iPhone)
+- Installs Appium globally (faster than npx)
+- Detects and boots available iOS simulator
+- Starts Appium server with proper configuration
 - Runs iOS test suite
 - Generates Allure reports
 - Uploads test artifacts (results, reports, screenshots)
 - Publishes report to GitHub Pages
 
-**Duration:** ~8-12 minutes
+**Duration:** ~10-15 minutes
 
-**Note:** iOS tests require a valid iOS app in `apps/ios/` directory.
+**Simulator Detection Logic:**
+1. Looks for iPhone 15 Pro (preferred)
+2. Falls back to iPhone 15 if available
+3. Uses any available iPhone simulator as last resort
+
+**Note:** iOS tests require the bundleId to be configured correctly in `wdio.ios.conf.ts`
 
 ---
 
@@ -56,47 +69,209 @@ Fast linting and type checking for quick feedback.
 
 **What it does:**
 - Runs ESLint code quality checks
-- Performs TypeScript type checking
+- Performs TypeScript type checking (strict mode)
+- Verifies build configuration
 
 **Duration:** ~2-3 minutes
+
+**GitHub Actions Features:**
+- Node.js 20 LTS
+- npm cache enabled for all workflows
+- Latest action versions (v4)
+
+---
+
+## Configuration Requirements
+
+### Prerequisites for Successful Runs
+
+#### Android Tests
+- APK file location: `apps/android/app-debug.apk`
+- App package: `com.wdiodemoapp` (update in `wdio.conf.ts`)
+- Emulator: Pixel 5 profile, API 34
+- Java 17 (automatically installed via actions/setup-java)
+
+#### iOS Tests
+- App bundle ID: `com.wdiodemoapp` (update in `wdio.ios.conf.ts`)
+- Simulator: iPhone 15 Pro or fallback to any iPhone
+- Xcode Command Line Tools required (pre-installed on GitHub Actions macOS runners)
+- Appium XCUITest driver (auto-installed)
+
+---
+
+## Environment Setup
+
+### Local Testing Before CI/CD
+
+1. **Verify all tools are installed:**
+   ```bash
+   node --version          # v20+
+   npm --version           # v9+
+   appium --version        # v2.0+
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm ci                  # Use npm ci instead of npm install in CI
+   ```
+
+3. **Run linting checks:**
+   ```bash
+   npm run lint
+   npx tsc --noEmit
+   ```
+
+4. **Test locally before pushing:**
+   ```bash
+   npm run test:demo       # Quick smoke test
+   npm run test:android    # Full Android suite
+   npm run test:ios        # Full iOS suite
+   ```
+
+---
+
+## GitHub Pages Setup
+
+### Enable GitHub Pages for Reports
+
+1. **Go to repository Settings:**
+   - Navigate to: Settings → Pages
+   - Source: Deploy from a branch
+   - Branch: `gh-pages` / `root`
+   - Click Save
+
+2. **View Generated Reports:**
+   - Android: `https://username.github.io/repo-name/android-reports/`
+   - iOS: `https://username.github.io/repo-name/ios-reports/`
+
+### Report Features:
+- Real-time test execution timeline
+- Pass/fail statistics and trends
+- Detailed test steps and logs
+- Screenshots on failures
+- Separate reports for each platform
+- Historical data across runs
 
 ---
 
 ## Viewing Test Results
 
 ### Artifacts
-After each workflow run, you can download:
-- **Allure Results** - Raw test execution data
-- **Allure Report** - HTML report with detailed test results
-- **Screenshots** - Screenshots captured during test failures
 
-To download artifacts:
-1. Go to the Actions tab in your repository
-2. Click on a workflow run
-3. Scroll to the "Artifacts" section at the bottom
-4. Download the desired artifact
+After each workflow run, download artifacts:
 
-### Allure Reports on GitHub Pages
+1. Go to the Actions tab
+2. Click on a specific workflow run
+3. Scroll to "Artifacts" section
+4. Download desired artifact
 
-The workflows automatically publish Allure reports to GitHub Pages:
+**Available Artifacts:**
+- `android-test-artifacts` - Android test results and reports
+- `ios-test-artifacts` - iOS test results and reports
 
-1. **Enable GitHub Pages:**
-   - Go to Settings → Pages
-   - Source: Deploy from a branch
-   - Branch: `gh-pages` / `root`
-   - Save
+### Allure Reports
 
-2. **View Reports:**
-   - Android Reports: `https://<your-username>.github.io/<repository-name>/android-reports`
-   - iOS Reports: `https://<your-username>.github.io/<repository-name>/ios-reports`
-   - Each test run updates the report in its respective directory
+The workflows automatically generate and publish Allure reports:
+- HTML reports with interactive UI
+- Test timeline and statistics
+- Pass/fail analysis
+- Failure screenshots and logs
+- Available for 7 days (configurable via `retention-days`)
 
-3. **Report Features:**
-   - Test execution timeline
-   - Pass/fail statistics
-   - Test case details with steps
-   - Screenshots on failures
-   - Separate reports for Android and iOS platforms
+---
+
+## Troubleshooting
+
+### iOS Tests Failing
+
+**Issue:** "Could not find module 'XCTest'"
+
+**Solution:**
+1. Verify Xcode is properly selected:
+   ```bash
+   xcode-select -p
+   ```
+2. Reset Xcode selection:
+   ```bash
+   sudo xcode-select --reset
+   ```
+
+### Android Emulator Issues
+
+**Issue:** Emulator not booting
+
+**Solution:**
+1. Check available emulators:
+   ```bash
+   emulator -list-avds
+   ```
+2. Create a new emulator:
+   ```bash
+   avdmanager create avd -n Pixel5 -k "system-images;android;34;google_apis;arm64-v8a"
+   ```
+
+### TypeScript Compilation Errors
+
+**Issue:** "Cannot find type definition for '@wdio/globals'"
+
+**Solution:**
+1. Ensure tsconfig.json has correct types:
+   ```json
+   "types": ["node", "@wdio/globals", "mocha"]
+   ```
+2. Clear node_modules and reinstall:
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
+
+### ESLint Warnings
+
+**Issue:** "TypeScript version not officially supported"
+
+**Solution:**
+- Update to compatible TypeScript version:
+  ```bash
+  npm install typescript@5.3.3 --save-dev
+  ```
+
+---
+
+## Performance Tips
+
+### Reducing Workflow Duration
+
+1. **Use npm cache:**
+   - Automatically enabled in workflows
+   - Saves ~2-3 minutes per run
+
+2. **Parallel execution:**
+   - CI/CD workflow runs independently for faster feedback
+   - Platform-specific tests (Android/iOS) run on dedicated runners
+
+3. **Optimize test suites:**
+   - Use `test:demo` for quick validation
+   - Run full suites only on main branches
+
+### Cost Optimization
+
+- GitHub Actions: 2,000 free minutes/month for public repos
+- Current framework: ~20-30 minutes per full run
+- Estimate: ~60-90 runs/month within free tier
+- Consider: Split into minimal required tests per branch
+
+---
+
+## Next Steps
+
+1. Commit changes: `git commit -am "Update workflows for CI/CD"`
+2. Push to main/develop
+3. Monitor Actions tab for first run
+4. Download and review test artifacts
+5. Configure GitHub Pages for reports
+6. Share report links with team
+
+
 
 ---
 

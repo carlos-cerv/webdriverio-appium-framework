@@ -48,13 +48,13 @@ export const config: Options.Testrunner = {
     capabilities: [{
         platformName: 'Android',
         // Android device name (emulator or real device)
-        'appium:deviceName': 'Pixel 9a',
+        'appium:deviceName': 'emulator-5554',
         // Android OS version
         'appium:platformVersion': '16.0',
         // Automation framework for Android
         'appium:automationName': 'UiAutomator2',
-        // Path to the Android application package (APK)
-        'appium:app': '/Users/carlos.eduardo/webDriveriO/apps/android/app-debug.apk',
+        // Path to the Android application package (APK) - use relative path for CI/CD
+        'appium:app': process.env.CI ? './apps/android/app-debug.apk' : process.cwd() + '/apps/android/app-debug.apk',
         // Android app package identifier
         'appium:appPackage': 'com.wdiodemoapp',
         // Main activity to launch
@@ -62,11 +62,15 @@ export const config: Options.Testrunner = {
         // Automatically grant app permissions
         'appium:autoGrantPermissions': true,
         // Don't reset app state between sessions
-        'appium:noReset': true,
+        'appium:noReset': false,
         // Don't perform full app reset
         'appium:fullReset': false,
         // Command timeout in seconds (prevent session timeout)
-        'appium:newCommandTimeout': 240
+        'appium:newCommandTimeout': 300,
+        // Network timeout
+        'appium:connectHardwareBackButton': true,
+        // Enable video recording
+        'appium:recordVideo': false
     }],
 
     //

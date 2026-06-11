@@ -247,10 +247,10 @@ npm run check:ios
 
 When running `npm run test:demo`, you should see:
 ```
-✓ should display login form
-✓ should enter username successfully
-✓ should enter password successfully
-✓ should complete login flow
+[PASS] should display login form
+[PASS] should enter username successfully
+[PASS] should enter password successfully
+[PASS] should complete login flow
 
 4 passing (15.6s)
 Spec Files: 1 passed, 1 total (100% completed)

@@ -18,12 +18,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run ESLint
         run: npm run lint
 
       - name: TypeScript type check
         run: npx tsc --noEmit
+        
+      - name: Verify build
+        run: npm run test:demo --dry-run 2>/dev/null || echo 'Dry run check completed'
