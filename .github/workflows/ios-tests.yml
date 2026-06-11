@@ -31,58 +31,90 @@ jobs:
           xcodebuild -version
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Install Appium globally
+        run: npm install -g appium appium-xcuitest-driver
 
       - name: Install Appium drivers
         run: |
-          npx appium driver update xcuitest || npx appium driver install xcuitest
+          appium driver install xcuitest || echo "XCUITest driver already installed"
 
       - name: Create and Boot iOS Simulator
         run: |
           echo "Available iOS Simulators:"
           xcrun simctl list devices available
           
-          # Find iPhone 15 Pro with iOS 18.4
-          SIMULATOR_ID=$(xcrun simctl list devices available | grep -E "iPhone 15 Pro.*18\.4" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+          # Find iPhone 15 Pro (latest available)
+          SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15 Pro" | grep -v "unavailable" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
           
           if [ -z "$SIMULATOR_ID" ]; then
-            echo "iPhone 15 Pro with iOS 18.4 not found, looking for any iPhone 15 Pro"
-            SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15 Pro" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+            echo "iPhone 15 Pro not found, trying iPhone 15"
+            SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone 15" | grep -v "unavailable" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
           fi
           
           if [ -z "$SIMULATOR_ID" ]; then
-            echo "No iPhone 15 Pro found, using any available iPhone"
+            echo "Using any available iPhone simulator"
             SIMULATOR_ID=$(xcrun simctl list devices available | grep "iPhone" | grep -v "unavailable" | head -1 | grep -oE '\([A-F0-9-]+\)' | tr -d '()')
+          fi
+          
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "ERROR: No suitable iOS simulator found"
+            exit 1
           fi
           
           echo "Selected Simulator ID: $SIMULATOR_ID"
           
-          # Get device details
-          DEVICE_INFO=$(xcrun simctl list devices available | grep "$SIMULATOR_ID")
-          echo "Device Info: $DEVICE_INFO"
+          # Shutdown any running simulator first
+          echo "Shutting down any running simulators..."
+          xcrun simctl shutdown all || true
+          sleep 2
           
           # Boot the simulator
           echo "Booting simulator..."
-          xcrun simctl boot $SIMULATOR_ID || echo "Simulator already booted"
+          xcrun simctl boot $SIMULATOR_ID || echo "Simulator boot initiated"
           
           # Wait for simulator to be ready
           echo "Waiting for simulator to be ready..."
-          for i in {1..30}; do
+          COUNTER=0
+          MAX_ATTEMPTS=40
+          while [ $COUNTER -lt $MAX_ATTEMPTS ]; do
             if xcrun simctl list devices | grep "$SIMULATOR_ID" | grep -q "Booted"; then
               echo "Simulator is booted and ready"
               break
             fi
-            echo "Waiting... ($i/30)"
-            sleep 2
+            COUNTER=$((COUNTER + 1))
+            echo "Waiting... ($COUNTER/$MAX_ATTEMPTS)"
+            sleep 3
           done
           
-          # List booted devices
-          echo "Booted devices:"
+          if [ $COUNTER -eq $MAX_ATTEMPTS ]; then
+            echo "WARNING: Simulator boot timeout, attempting tests anyway"
+          fi
+          
+          echo "Final device status:"
           xcrun simctl list devices | grep Booted
+
+      - name: Start Appium server
+        run: |
+          echo "Starting Appium server..."
+          appium --log-level warn &
+          APPIUM_PID=$!
+          sleep 8
+          echo "Appium server started with PID: $APPIUM_PID"
+          echo "APPIUM_PID=$APPIUM_PID" >> $GITHUB_ENV
 
       - name: Run iOS tests
         run: npm run test:ios
         continue-on-error: true
+
+      - name: Stop Appium server
+        if: always()
+        run: |
+          if [ ! -z "$APPIUM_PID" ]; then
+            kill $APPIUM_PID || true
+            echo "Appium server stopped"
+          fi
 
       - name: Generate Allure Report
         if: always()

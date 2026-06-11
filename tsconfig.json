@@ -18,6 +18,10 @@
       "@wdio/globals",
       "mocha"
     ],
+    // NoEmit for CI/CD to skip output generation during type checking
+    "noEmit": true,
+    // Ensure proper module interop
+    "isolatedModules": true,
     // Enable importing JSON files as modules
     "resolveJsonModule": true,
     // Enable interoperability between CommonJS and ES Modules
