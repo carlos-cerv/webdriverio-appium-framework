@@ -51,34 +51,55 @@ jobs:
       - name: Install Appium globally
         run: npm install -g appium appium-uiautomator2-driver
 
-      - name: Run Android tests with Emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: arm64-v8a
-          profile: pixel_5
-          cores: 4
-          ram-size: 8192M
-          heap-size: 1024M
-          disk-size: 8192M
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          disable-animations: true
-          disable-spellchecker: true
-          disable-linux-hw-accel: auto
-          emulator-boot-timeout: 900
-          enable-hw-keyboard: false
-          script: |
-            echo "Starting Appium server..."
-            appium --log-level warn &
-            APPIUM_PID=$!
-            sleep 5
-            echo "Running tests..."
-            npm run test:android || TEST_RESULT=$?
-            kill $APPIUM_PID || true
-            exit ${TEST_RESULT:-0}
+      - name: Create AVD and start Emulator
+        run: |
+          # Create Android Virtual Device if it doesn't exist
+          echo "Creating AVD..."
+          echo "no" | avdmanager create avd -n test_emulator -k "system-images;android;34;google_apis;arm64-v8a" -f || true
+          
+          # Start emulator
+          echo "Starting emulator..."
+          emulator -avd test_emulator -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim &
+          EMULATOR_PID=$!
+          
+          # Wait for boot with timeout
+          echo "Waiting for emulator to boot..."
+          timeout 300 bash -c 'until adb devices | grep emulator; do sleep 2; done' || true
+          
+          # Additional wait for full boot
+          for i in {1..30}; do
+            BOOT_STATUS=$(adb shell getprop sys.boot_completed 2>/dev/null || echo "0")
+            if [ "$BOOT_STATUS" = "1" ]; then
+              echo "Emulator ready"
+              break
+            fi
+            echo "Waiting for boot... ($i/30)"
+            sleep 2
+          done
+          
+          echo "EMULATOR_PID=$EMULATOR_PID" >> $GITHUB_ENV
+
+      - name: Run Android tests
+        run: |
+          echo "Starting Appium server..."
+          appium --log-level warn &
+          APPIUM_PID=$!
+          sleep 5
+          
+          echo "Running tests..."
+          npm run test:android || TEST_RESULT=$?
+          
+          kill $APPIUM_PID || true
+          exit ${TEST_RESULT:-0}
         continue-on-error: true
+
+      - name: Stop Emulator
+        if: always()
+        run: |
+          if [ ! -z "$EMULATOR_PID" ]; then
+            kill $EMULATOR_PID || true
+            echo "Emulator stopped"
+          fi
 
       - name: Generate Allure Report
         if: always()
